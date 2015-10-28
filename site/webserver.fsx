@@ -16,9 +16,24 @@ let serverConfig =
     let port = getBuildParamOrDefault "port" "8083" |> Sockets.Port.Parse
     { defaultConfig with bindings = [ HttpBinding.mk HTTP IPAddress.Loopback port ] }
 
-startWebServer serverConfig 
-    (OK  
-        ("Hello World! It's Suave.io on Azure Websites.<br /><ul>" + 
-          "<li>Sample git Repo: <a href='https://github.com/shanselman/suavebootstrapper'>https://github.com/shanselman/suavebootstrapper</a></li>" +
-          "<li>Intro blog post: <a href='http://www.hanselman.com/blog/RunningSuaveioAndFWithFAKEInAzureWebAppsWithGitAndTheDeployButton.aspx'>http://www.hanselman.com/blog/RunningSuaveioAndFWithFAKEInAzureWebAppsWithGitAndTheDeployButton.aspx</a></li>" +
-          "</ul>"))
+type BlogPost = {Title: string; Body: string}
+
+let blogPosts = [| {Title = "First post"; Body = "This is the first post in this awesome blog!"};
+                   {Title = "2nd post"; Body = "Second blog post"} |]
+
+let webPart = 
+    choose [
+        path "/" >>= Files.browseFileHome "index.html"
+        path "/get_latest_blog_posts" >>= (OK (JsonConvert.SerializeObject blogPosts)) >>= setMimeType "application/json"
+        pathScan "/get_blog_post/%d" (fun (id) -> (OK (JsonConvert.SerializeObject blogPosts.[id])) >>= setMimeType "application/json")
+
+        pathRegex "(.*)\.html" >>= Files.browseHome
+        pathRegex "(.*)\.css" >>= Files.browseHome
+        pathRegex "(.*)\.js" >>= Files.browseHome
+        path "/store" >>= (OK "Store")
+        path "/store/browse" >>= (OK "Store")
+        path "/store/details" >>= (OK "Details")
+        pathScan "/store/details/%s/%d" (fun (a, id) -> OK (sprintf "Artist: %s; Id: %d" a id))
+    ]
+
+startWebServer serverConfig webPart
